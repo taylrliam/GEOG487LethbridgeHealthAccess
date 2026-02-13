@@ -1,0 +1,12 @@
+{
+"type": "FeatureCollection",
+"name": "Health_Care_Facilities",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "OBJECTID": 1, "Name": "Chinook Regional Hospital", "Address": "960 19 St S", "Type": "Hospital", "Access": "Public", "Agency": "Chinook Health", "LocationMethod": "Heads Up Digitizing", "Url": "http://www.albertahealthservices.ca/facilities.asp?pid=facility&rid=3312", "GlobalID": "{2F9666A4-09A5-489A-AEF5-014F4AAAE735}" }, "geometry": { "type": "Point", "coordinates": [ -112.816239341480355, 49.685218994492729 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 2, "Name": "St. Michaels Health Centre", "Address": "1400 9 Ave S", "Type": "Care Facility", "Access": "Private", "Agency": "Chinook Health", "LocationMethod": "Heads Up Digitizing", "Url": "http://www.albertahealthservices.ca/facilities.asp?pid=facility&rid=3295", "GlobalID": "{263E4704-F0B7-4ED5-B015-F6A9733722FF}" }, "geometry": { "type": "Point", "coordinates": [ -112.822571218827122, 49.685942705721217 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 3, "Name": "Lethbridge Health Unit", "Address": "801 1 Ave S", "Type": "Care Site", "Access": "Public", "Agency": "Chinook Health", "LocationMethod": "Heads Up Digitizing", "Url": null, "GlobalID": "{586E5B50-F7F2-4489-854E-2D12BEFC09EF}" }, "geometry": { "type": "Point", "coordinates": [ -112.835917428043231, 49.698374067787114 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 11, "Name": "Sexual Health Centre ", "Address": "801 1 Ave S ", "Type": "Clinic", "Access": "Public", "Agency": "Chinook Health", "LocationMethod": "Heads Up Digitizing", "Url": null, "GlobalID": "{937E05EC-A66A-41F5-9805-CD0E279E6EA4}" }, "geometry": { "type": "Point", "coordinates": [ -112.836439162202282, 49.698265464938046 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 12, "Name": "Train Station ", "Address": "801 1 Ave S ", "Type": "Clinic", "Access": "Public", "Agency": "Chinook Health", "LocationMethod": "Heads Up Digitizing", "Url": null, "GlobalID": "{59B8C065-D935-46D7-8957-81A5C47B843D}" }, "geometry": { "type": "Point", "coordinates": [ -112.835535471841766, 49.698288125483579 ] } }
+]
+}

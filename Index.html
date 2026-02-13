@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leaflet Map — Lethbridge</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; }
+    h2 { margin:12px 16px; }
+    #map { width:100%; height:90vh; }
+
+    .hospital-plus{
+      color:red;
+      font-size:22px;
+      font-weight:bold;
+      text-align:center;
+      line-height:20px;
+    }
+
+    .legend{
+      background:white;
+      padding:10px;
+      line-height:18px;
+      color:#333;
+      border-radius:6px;
+      box-shadow:0 0 15px rgba(0,0,0,0.2);
+    }
+    .legend i{
+      width:18px;
+      height:18px;
+      float:left;
+      margin-right:8px;
+      opacity:0.85;
+    }
+
+    .infobox{
+      background:rgba(255,255,255,0.92);
+      padding:10px;
+      line-height:16px;
+      color:#333;
+      border-radius:6px;
+      box-shadow:0 0 15px rgba(0,0,0,0.2);
+      font-size:12px;
+      max-width:260px;
+      max-height:110px;
+      overflow:auto;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Healthcare Facilities, Census Vulnerability, and Network Service Areas — Lethbridge, AB</h2>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!--Turf (this helps with the first network analysis kinda acts like dissolve) --> 
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <script>
+    // BAse map 
+    const map = L.map("map").setView([49.6956, -112.8451], 11.5);
+
+    const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap"
+    }).addTo(map);
+
+    const layerControl = L.control.layers(
+      { "OpenStreetMap": osm },
+      {},
+      { collapsed: false }
+    ).addTo(map);
+
+    // loads the GeoJSONs and will tell if I am getting an error
+    async function loadGeoJSON(path) {
+      const resp = await fetch(path, { cache: "no-store" });
+      if (!resp.ok) throw new Error(`${path} failed: ${resp.status} ${resp.statusText}`);
+      return await resp.json();
+    }
+
+    // Colors for CISV Outputs
+    function daColor(q){
+      switch(Number(q)){
+        case 1: return "#ffffcc";
+        case 2: return "#a1dab4";
+        case 3: return "#41b6c4";
+        case 4: return "#2c7fb8";
+        case 5: return "#253494";
+        default: return "#cccccc";
+      }
+    }
+
+    function bandFill(band){
+      if (band === "0-5") return "#2ecc71";
+      if (band === "5-10") return "#f39c12";
+      if (band === "10-15") return "#e74c3c";
+      return "#999999";
+    }
+
+    // Lakes/river (keep for other GeoJSons)
+    loadGeoJSON("Lakes_and_Rivers.geojson").then(data => {
+      const lakes = L.geoJSON(data, {
+        style: { color:"#1f78b4", weight:1, fillOpacity:0.5, fillColor:"#1f78b4" }
+      }).addTo(map);
+      layerControl.addOverlay(lakes, "Lakes & Rivers");
+    }).catch(console.error);
+
+    // Loads Streets
+    loadGeoJSON("Street_Network.geojson").then(data => {
+      const streets = L.geoJSON(data, { style:{ color:"#2c3e50", weight:2 } }).addTo(map);
+      layerControl.addOverlay(streets, "Street Network");
+      try { map.fitBounds(streets.getBounds()); } catch(e) {}
+      streets.bringToBack();
+    }).catch(console.error);
+
+   
+// Healthcare spots (proposed and current + their symbols and colors)
+loadGeoJSON("HealthcareClinicsProposed.geojson").then(data => {
+
+  function clinicIcon(plusColor) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:28px;
+          height:28px;
+          border-radius:50%;
+          background:#ffffff;
+          border:2px solid rgba(0,0,0,0.25);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          box-shadow:0 1px 6px rgba(0,0,0,0.35);
+        ">
+          <span style="
+            color:${plusColor};
+            font-size:22px;
+            font-weight:900;
+            line-height:1;
+          ">+</span>
+        </div>
+      `,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+  }
+
+  
+  const CURRENT_ID = 1;
+  const PROPOSED_ID = 2;
+
+  const clinicsLayer = L.geoJSON(data, {
+    pointToLayer: (feature, latlng) => {
+      const p = feature?.properties || {};
+
+     
+      const groupVal = Number(p.OBJECTID_1);
+
+      const isProposed = (groupVal === PROPOSED_ID);
+      const plusColor = isProposed ? "#1b7f2a" : "#e31a1c"; // green / red
+
+      return L.marker(latlng, { icon: clinicIcon(plusColor) });
+    },
+    onEachFeature: (feature, layer) => {
+      const p = feature?.properties || {};
+      const name = p.Name || p.NAME || p.name || "Clinic";
+
+      const groupVal = Number(p.OBJECTID_1);
+      const status = (groupVal === PROPOSED_ID) ? "Proposed clinic" : "Current clinic";
+
+      layer.bindPopup(`<b>${name}</b><br>${status}`);
+    }
+  }).addTo(map);
+
+  layerControl.addOverlay(clinicsLayer, "Clinics (Current vs Proposed)");
+
+  // Legend for top right 
+  const clinicLegend = L.control({ position: "topright" });
+  clinicLegend.onAdd = function () {
+    const div = L.DomUtil.create("div", "legend");
+    div.innerHTML = `
+      <b>Clinics</b><br>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,0.25);
+                    display:flex;align-items:center;justify-content:center;">
+          <span style="color:#e31a1c;font-weight:900;">+</span>
+        </div>
+        <span>Current</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,0.25);
+                    display:flex;align-items:center;justify-content:center;">
+          <span style="color:#1b7f2a;font-weight:900;">+</span>
+        </div>
+        <span>Proposed</span>
+      </div>
+    `;
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+  };
+  clinicLegend.addTo(map);
+
+}).catch(err => {
+  console.error("Clinics load failed:", err);
+  alert("Could not load HealthcareClinicsProposed.geojson — check Console (F12).");
+});
+
+
+    // Dissemination Areas GeoJson Loader
+    loadGeoJSON("Tester.geojson").then(data => {
+      const das = L.geoJSON(data, {
+        style: (feature) => ({
+          color: "#333",
+          weight: 1,
+          fillColor: daColor(feature?.properties?.CISV_Quint),
+          fillOpacity: 0.55
+        }),
+        onEachFeature: (feature, layer) => {
+          const p = feature?.properties || {};
+          layer.bindPopup(
+            `<b>DAUID:</b> ${p.DAUID ?? "n/a"}<br>` +
+            `<b>CISV_Quint:</b> ${p.CISV_Quint ?? "n/a"}<br>` +
+            `<b>CISV_Score:</b> ${p.CISV_Score ?? "n/a"}`
+          );
+        }
+      }).addTo(map);
+
+      layerControl.addOverlay(das, "Census DAs (CISV Quintile)");
+
+      // Legend for DA (bottom right)
+      const daLegend = L.control({ position:"bottomright" });
+      daLegend.onAdd = function(){
+        const div = L.DomUtil.create("div","legend");
+        div.innerHTML = "<b>CISV Quintile</b><br>";
+        [1,2,3,4,5].forEach(q=>{
+          div.innerHTML += `<i style="background:${daColor(q)}"></i> Quintile ${q}<br>`;
+        });
+        return div;
+      };
+      daLegend.addTo(map);
+
+      // Text for CISV
+      const cisvInfo = L.control({ position:"topleft" });
+      cisvInfo.onAdd = function(){
+        const div = L.DomUtil.create("div","infobox");
+        div.innerHTML = `
+          <b>Census Vulnerability (CISV)</b><br>
+          The Canadian Index of Social Vulnerability identifies areas where residents may experience varying levels of social and economic vulnerability.
+          Higher quintile values represent greater vulnerability based on demographic and socioeconomic characteristics.
+        `;
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+      };
+      cisvInfo.addTo(map);
+
+    }).catch(console.error);
+
+    // Network Analysis --> this one does it like arcgis since was unable to export dissolved NA into a GeoJson
+    let networkLayer = null;
+
+    loadGeoJSON("NetworkAnalysisGEO.geojson")
+      .then(data => {
+        const g0_5 = [];
+        const g5_10 = [];
+        const g10_15 = [];
+
+        for (const f of data.features || []) {
+          const p = f.properties || {};
+          const from = Number(p.FromBreak);
+          const to   = Number(p.ToBreak);
+
+          if (from === 0 && to === 5) g0_5.push(f);
+          else if (from === 5 && to === 10) g5_10.push(f);
+          else if (from === 10 && to === 15) g10_15.push(f);
+        }
+
+        function dissolve(features, bandLabel) {
+          if (!features.length) return null;
+          let out = features[0];
+          for (let i = 1; i < features.length; i++) {
+            out = turf.union(out, features[i]);
+          }
+          // tags the "dissolved" polygon
+          out.properties = { band: bandLabel };
+          return out;
+        }
+
+        const d10_15 = dissolve(g10_15, "10-15");
+        const d5_10  = dissolve(g5_10,  "5-10");
+        const d0_5   = dissolve(g0_5,   "0-5");
+
+        const merged = {
+          type: "FeatureCollection",
+          
+          features: [d10_15, d5_10, d0_5].filter(Boolean)
+        };
+
+        networkLayer = L.geoJSON(merged, {
+          style: (feature) => {
+            const band = feature?.properties?.band;
+            return {
+              color: "#000",
+              weight: 2,
+              fillColor: bandFill(band),
+              fillOpacity: 0.65
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            const band = feature?.properties?.band ?? "n/a";
+            layer.bindPopup(`<b>Travel time:</b> ${band} minutes`);
+          }
+        }).addTo(map);
+
+        layerControl.addOverlay(networkLayer, "Network Service Areas");
+
+        // Network legend (bottom left)
+        const serviceLegend = L.control({ position: "bottomleft" });
+        serviceLegend.onAdd = function () {
+          const div = L.DomUtil.create("div", "legend");
+          div.innerHTML += `<i style="background:#2ecc71"></i> 0–5 min<br>`;
+          div.innerHTML += `<i style="background:#f39c12"></i> 5–10 min<br>`;
+          div.innerHTML += `<i style="background:#e74c3c"></i> 10–15 min<br>`;
+          return div;
+        };
+        serviceLegend.addTo(map);
+
+        // Text for networks
+        const networkInfo = L.control({ position: "bottomleft" });
+        networkInfo.onAdd = function () {
+          const div = L.DomUtil.create("div", "infobox");
+          div.innerHTML = `
+            <b>Healthcare Accessibility (Network Analysis)</b><br>
+            Travel time to the nearest healthcare facility using the road network.
+          `;
+          L.DomEvent.disableClickPropagation(div);
+          return div;
+        };
+        networkInfo.addTo(map);
+      })
+      .catch(err => {
+        console.error("Network layer failed:", err);
+        alert("NetworkAnalysisGEO.geojson failed to load. Press F12 → Console.");
+      });
+// Proposed Clinics (dissolved worked this time much simpler)
+loadGeoJSON("ProposedClinics.geojson").then(data => {
+
+  function proposedFill(p) {
+    
+    const to =
+      Number(p.ToBreak ?? p.tobreak ?? p.TOBREAK ?? p["ToBreak"] ?? p["To Break"]);
+
+    if (to === 5)  return "#2ecc71"; // 0–5
+    if (to === 10) return "#f39c12"; // 0–10 
+    if (to === 15) return "#e74c3c"; // 0–15 
+    return "#9b59b6"; // Purple incase anywhere is missed
+  }
+
+  const proposedLayer = L.geoJSON(data, {
+    style: (feature) => {
+      const p = feature.properties || {};
+      return {
+        color: "#000",
+        weight: 2,
+        fillColor: proposedFill(p),
+        fillOpacity: 0.55
+      };
+    },
+    onEachFeature: (feature, layer) => {
+      const p = feature.properties || {};
+      const to = p.ToBreak ?? p.tobreak ?? p.TOBREAK ?? p["ToBreak"] ?? p["To Break"];
+      layer.bindPopup(`<b>Proposed service area</b><br><b>ToBreak:</b> ${to}`);
+    }
+  }).addTo(map);
+
+  layerControl.addOverlay(proposedLayer, "Proposed Clinics — Service Areas");
+
+}).catch(err => {
+  console.error("ProposedClinics failed:", err);
+  alert("Could not load ProposedClinics.geojson — check Console (F12).");
+});
+// Future Development Sites
+let futureDevLayer = null;
+let futureDevLegend = null;
+
+loadGeoJSON("FutureDevelopmentSites.geojson")
+  .then(data => {
+    // Check if coordinates are correct
+    const first = data?.features?.[0]?.geometry?.coordinates?.[0]?.[0];
+    console.log("FutureDev first coord:", first); 
+// Make dashed brown border
+    futureDevLayer = L.geoJSON(data, {
+      style: () => ({
+        color: "#6b4f2a",        
+        weight: 2,
+        dashArray: "1,2",        
+        fillColor: "#8b6b3d",    
+        fillOpacity: 0.30
+      }),
+      onEachFeature: (feature, layer) => {
+        const p = feature?.properties || {};
+        const label = p.DESCPT || p.Description || p.LUCD || "Future Development";
+        layer.bindPopup(`<b>${label}</b>`);
+      }
+    });
+
+    // Map does not seem to work without this do not change
+    futureDevLayer.addTo(map);
+    layerControl.addOverlay(futureDevLayer, "Future Development Sites");
+
+   
+    futureDevLayer.bringToBack();
+
+    // top right legen
+    futureDevLegend = L.control({ position: "topright" });
+    futureDevLegend.onAdd = function () {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `
+        <b>Future Development</b><br>
+        <i style="
+          background:#8b6b3d;
+          border:2px dashed #6b4f2a;
+          width:18px;height:18px;
+          display:inline-block;
+          margin-right:6px;
+        "></i>
+        Planned Urban Growth
+      `;
+      L.DomEvent.disableClickPropagation(div);
+      return div;
+    };
+    futureDevLegend.addTo(map);
+  })
+  .catch(err => {
+    console.error("FutureDevelopmentSites load failed:", err);
+    alert("FutureDevelopmentSites.geojson failed to load. Check F12 → Console.");
+  });
+
+
+  </script>
+</body>
+</html>
